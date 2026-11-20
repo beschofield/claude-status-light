@@ -10,6 +10,10 @@
 #define N 12             // LEDs in the ring
 #define BRIGHT 60        // 0-255; keeps current well under USB limits
 #define READY_HOLD_MS 60000UL
+// Rotates every animation so pixel 0 of the pattern lands under a chosen LED.
+// Once the stems are on, find which ring index sits under the tallest mushroom
+// and put it here.
+#define PIXEL_OFFSET 0
 
 Adafruit_NeoPixel ring(N, PIN, NEO_GRB + NEO_KHZ800);
 char mode = 'i';
@@ -23,7 +27,7 @@ void setMode(char m) {
 void setRGB(int i, float v, uint8_t r, uint8_t g, uint8_t b) {
   if (v < 0) v = 0;
   if (v > 1) v = 1;
-  ring.setPixelColor(i, ring.Color(r * v, g * v, b * v));
+  ring.setPixelColor((i + PIXEL_OFFSET) % N, ring.Color(r * v, g * v, b * v));
 }
 
 void setup() {

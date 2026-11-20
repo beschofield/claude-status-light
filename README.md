@@ -4,7 +4,7 @@ A Flora + NeoPixel ring desk light that shows what Claude Code is doing, built i
 
 - `firmware/`: Flora sketch (flash with the Arduino IDE).
 - `hooks/`: `light.sh` and the Claude Code hook config. Copy `hooks/` to `~/claude-light` and merge `hooks-settings.json` into `~/.claude/settings.json`.
-- `model/`: parametric draft of the enclosure. `pip install -r requirements.txt && python3 -I build_shroom.py out`.
+- `model/`: the enclosure. The real model is in Onshape; `model/ONSHAPE.md` tracks progress. The Python script is an older parametric draft: `pip install -r requirements.txt && python3 -I build_shroom.py out`.
 
 See `CLAUDE.md` for wiring, decisions and open items.
 
