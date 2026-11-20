@@ -1,0 +1,81 @@
+// Claude Code status light: Adafruit Flora + 12-LED NeoPixel ring.
+// Serial commands (single characters, 9600 baud):
+//   w = working   (blue comet chasing around the ring)
+//   n = needs you (amber breathing)
+//   r = ready     (green fill, then soft glow; fades out after 60 s)
+//   i = idle      (off)
+#include <Adafruit_NeoPixel.h>
+
+#define PIN 6            // ring data-in -> Flora D6
+#define N 12             // LEDs in the ring
+#define BRIGHT 60        // 0-255; keeps current well under USB limits
+#define READY_HOLD_MS 60000UL
+
+Adafruit_NeoPixel ring(N, PIN, NEO_GRB + NEO_KHZ800);
+char mode = 'i';
+uint32_t t0 = 0;
+
+void setMode(char m) {
+  mode = m;
+  t0 = millis();
+}
+
+void setRGB(int i, float v, uint8_t r, uint8_t g, uint8_t b) {
+  if (v < 0) v = 0;
+  if (v > 1) v = 1;
+  ring.setPixelColor(i, ring.Color(r * v, g * v, b * v));
+}
+
+void setup() {
+  ring.begin();
+  ring.setBrightness(BRIGHT);
+  ring.clear();
+  ring.show();
+  Serial.begin(9600);
+}
+
+void loop() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'w' || c == 'n' || c == 'r' || c == 'i') setMode(c);
+  }
+
+  uint32_t t = millis() - t0;
+  ring.clear();
+
+  switch (mode) {
+    case 'w': {
+      // Comet: bright head, fading tail of 5 pixels, ~90 ms per step.
+      float head = fmod(t / 90.0, (float)N);
+      for (int i = 0; i < N; i++) {
+        float d = head - i;
+        if (d < 0) d += N;
+        float v = (d < 5) ? 1.0 - d / 5.0 : 0;
+        setRGB(i, v * v, 20, 90, 255);
+      }
+      break;
+    }
+    case 'n': {
+      // Amber breathing, 2 s period.
+      float b = (sin(t / 1000.0 * PI) + 1.0) / 2.0;
+      for (int i = 0; i < N; i++) setRGB(i, 0.15 + 0.85 * b, 255, 120, 0);
+      break;
+    }
+    case 'r': {
+      if (t > READY_HOLD_MS) { setMode('i'); break; }
+      float fill = t / 1000.0 * N;  // sweep fills the ring in 1 s
+      float breathe = 0.45 + 0.15 * sin(t / 2000.0 * PI);
+      for (int i = 0; i < N; i++) {
+        float v = fill - i;
+        if (v > 1) v = 1;
+        setRGB(i, v * breathe + (v < 1 ? v * 0.4 : 0), 40, 255, 90);
+      }
+      break;
+    }
+    default:
+      break;  // idle: off
+  }
+
+  ring.show();
+  delay(10);
+}
