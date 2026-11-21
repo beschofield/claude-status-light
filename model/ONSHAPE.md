@@ -36,8 +36,13 @@ Section view on the Front plane confirmed the stepped profile.
 
 ## Next
 
-1. **Test print** (owner doing this next): right-click Part 1, Export, STL, mm. Print upside down
-   (open Flora pocket up, no supports). Check that the Flora and the ring drop in. Adjust `fit` if needed.
+1. **Test print**: right-click Part 1, Export, STL, mm. Print it UPRIGHT (open Flora pocket down on the
+   bed, lid pocket up, no supports). Then the ring seat floor is a flat top surface and the Flora pocket
+   ceiling is the bridge (slack there doesn't matter). Check that the Flora and the ring drop in. Adjust `fit` if needed.
+   - 2026-11-21: first print was upside down (bad advice). The bare ring rocked, most likely because the
+     ring seat floor was a saggy bridge. Reprinting upright.
+   - The Flora goes in from the open bottom and rests against the pocket ceiling. The 10 mm pocket leaves
+     about 3 mm of slack, which the bottom plate's press-fit rim will take up.
 2. **Lesson 3: bottom plate (decided: option A, press-fit).** Second part in the same Part Studio:
    a disc that fills the Flora pocket opening with a press-fit rim. Plus the USB notch in the wall,
    about 11 mm wide and 7 mm tall, running down to the bottom edge. Its position must match where the
