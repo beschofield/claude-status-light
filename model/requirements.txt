@@ -1,7 +1,0 @@
-trimesh
-manifold3d
-numpy
-shapely
-mapbox_earcut
-rtree
-matplotlib

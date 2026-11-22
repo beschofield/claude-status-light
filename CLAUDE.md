@@ -3,44 +3,50 @@
 Project context for Claude Code. Read this first.
 
 ## Goal
-A cute desk status light for Claude Code (and ideally T3 Code, Codex, ChatGPT): an Adafruit Flora driving a 12-LED NeoPixel ring, housed in a 3D-printed cluster of translucent mushrooms. The owner designs the model herself in Onshape (switched from Blender, 2026-11-20), so teach and review step by step rather than generating CAD.
+Cute desk status lights that show what Claude Code is doing, at home and at work (work
+uses Claude Code on a different device). A kit, so more lights are easy: each light is a
+Seeed XIAO ESP32-C3 + a 12-LED NeoPixel ring (RGB or RGBW). The first one lives in a
+3D-printed cluster of translucent mushrooms; later ones may just sit in a jar or frosted cup.
+The owner designs the enclosure herself in Onshape, so teach and review step by step
+rather than generating CAD (see model/ONSHAPE.md).
+
+## Architecture (decided 2026-11-21)
+- **hub/**: `status_hub.py`, Python stdlib, runs on charon as a systemd user service,
+  published through Tailscale Funnel at `/status-light` (charon's `/` is the ghost figure).
+  Combines sessions per **channel** (`home`, `work`, ...): n > w > r > i; ready lasts 60 s;
+  stale sessions expire. Token auth. Long-poll endpoint for lights.
+- **client/**: `claude-light`, Python stdlib, installed on every machine running Claude
+  Code and called by hooks (`client/hooks-settings.json`). Sends session id + state only.
+  `serial=` mode writes straight to a USB-connected light (for office Wi-Fi the XIAO can't
+  join), combining that machine's sessions locally.
+- **firmware/**: PlatformIO, envs `xiao_rgb` / `xiao_rgbw`. WiFiManager setup screen
+  (StatusLight-Setup) stores Wi-Fi + name/hub/token/channel; hub long-poll in a FreeRTOS
+  task; local page at NAME.local; USB serial commands. Built on charon, flashed in the
+  browser from committed images (firmware/images/).
+- Lights only make outbound HTTPS calls, so any Wi-Fi with internet works.
 
 ## Hardware (decided)
-- Adafruit Flora v3 (45 mm round, 7 mm thick), 12-LED NeoPixel ring (36.8 mm OD, 23.3 mm ID, 3.6 mm thick; owner measured it, ignore the 6.7 mm figure on DigiKey's forum).
-- Ring type is a firmware option (RGBW 0/1). Current prototype ring: RGB (Adafruit 1643). Planned main ring: RGBW Natural White ~4500K (Adafruit 2852, DigiKey 1528-1604-ND) for pastels and whites. A second, simpler light may use either type.
-- Wiring: ring PWR -> Flora VBATT, GND -> GND, IN -> D6 (never OUT). Add a 300-500 ohm resistor on the data wire next to the ring and a 1000 uF capacitor across ring power if possible.
-- Soldering equipment not available yet; prototyping with alligator clips. Linux host.
-
-## Future lights: XIAO ESP32-C3 (planned, 2026-11-21)
-The owner may build more, simpler status lights (no complex enclosure: a jar or frosted cup as diffuser).
-For those, use a Seeed XIAO ESP32-C3 instead of a Flora (DigiKey 1597-113991054-ND, ~$5.25; alt: Adafruit QT Py ESP32-S3, 1528-5700-ND, ~$12.50, long lead time).
-- Why: Wi-Fi lets hooks on charon reach the light directly over LAN/Tailscale (no desk-side USB bridge); tiny (21 x 17.5 mm), USB-C, cheap.
-- Wiring: ring PWR -> 5V pin, GND -> GND, data via 470 ohm -> a GPIO. 3.3 V data usually drives NeoPixels fine on short wires; add a level shifter if colors glitch.
-- Antenna: external U.FL flex antenna (included); stick it to an inside wall, away from metal. Headers not included.
-- Firmware TODO: port the sketch (same NeoPixel code, RGBW option applies), add a Wi-Fi/HTTP mode for hooks, keep USB serial as fallback.
-- Could also replace the Flora in the mushroom (much smaller pocket); owner's call.
+- XIAO ESP32-C3. Ring data on D2 (GPIO4) through 470 ohm; ring power from 5V; capacitor
+  across ring power. 3.3 V data usually fine; level shifter if not.
+- Rings: all 36.8 mm OD, 23.3 mm ID, 3.6 mm thick (owner measured; ignore the 6.7 mm figure
+  on DigiKey's forum). Owner has an RGB ring (1643); main mushroom ring will be RGBW
+  natural white (2852). XIAOs and RGBW ring ordered 2026-11-21.
+- Details and part numbers: docs/hardware.md.
 
 ## Behavior (decided)
-All mushrooms show ONE shared status so animations can chase across the cluster:
-- w = working: blue comet; n = needs input: amber breathing; r = ready: green fill then glow, fades after 60 s; i = idle: off.
-- Claude Code hooks (hooks/hooks-settings.json) call hooks/light.sh, which writes one character to the Flora's serial port.
+w = working: blue comet; n = needs you: amber breathing; r = ready: green fill then glow,
+fades after 60 s; i = idle: off. System looks: purple = setup screen, white dot = joining
+Wi-Fi, red blink = hub unreachable, magenta double blink = bad token. Colors are {r,g,b,w}
+in firmware/src/looks.cpp; the owner wants room for pastels and varied colors.
 
-## Layout
-- firmware/flora_status_light/: Arduino sketch (Adafruit NeoPixel library, board "Adafruit Flora").
-- hooks/: light.sh and the hook config to merge into ~/.claude/settings.json (copy folder to ~/claude-light or update paths).
-- model/: build_shroom.py, a parametric draft generator (trimesh + manifold3d) that writes STLs to model/out/. A reference for dimensions only; the owner is building the real model in Onshape.
-
-## Modeling progress
-The real model lives in Onshape (document "claude status light"); progress, variables and lesson plan are in model/ONSHAPE.md. Continue teaching from there.
-
-## Model design (draft v1, Python reference)
-Vertical stack in the 56 mm base (z from the print bed): Flora cavity z0-10, wire hole z10-14.8, ring seat z14.8-18.4, lid pocket z18.4-22. A translucent lid (2.4 mm) sits on the ring with three 10.4 mm holes on the 15 mm LED circle at 90/210/330 degrees. Three hollow stems (10 mm OD, 7 mm bore) at heights 62/46/35 with hollow dome caps stand on those LEDs.
-
-## Known issues / open items
-- Bottom closure DECIDED (2026-11-20): option A, a separate press-fit bottom plate; USB notch runs to the bottom edge. Not modeled yet (lesson 3).
-- Fit untested: owner is test-printing the Onshape base before lesson 3. See model/ONSHAPE.md.
-- Caps are plain domes; owner likes ShroomWhisper-style gills/ridges and Voronoi lattice caps (MakerWorld). Check licenses before remixing.
-- LED-to-stem alignment: find which pixel index sits under the tallest stem and set PIXEL_OFFSET in the sketch.
-- Test whether T3 Code triggers the Claude Code hooks.
-- Hooks run where Claude Code runs (often the remote box charon), but the Flora is on the desk computer's USB. Needs a bridge (e.g. ssh reverse tunnel or a tiny listener on the desk machine) before charon sessions can drive it.
-- ChatGPT has no hooks; idea is a small browser extension that pings light.sh.
+## Status / open items
+- Nothing tested on hardware yet (parts on order). Hub and client are tested
+  (`python3 -m unittest discover -s hub`, plus a client run against a local hub).
+- Not deployed: hub service, Funnel path and hooks on charon need the owner's go-ahead
+  (Funnel is public-facing; hooks affect every session).
+- Work laptop: check employer policy on hooks pinging a personal server; office Wi-Fi may
+  force the USB serial fallback.
+- Enclosure: lesson 3 swaps the Flora pocket for a XIAO pocket (model/ONSHAPE.md).
+- Test whether T3 Code triggers the Claude Code hooks. ChatGPT has no hooks (browser
+  extension idea). Codex has its own hook/notify config: could call claude-light too.
+- Later: updates over Wi-Fi (partition layout already leaves room).

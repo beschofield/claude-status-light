@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Tell the status light what this Claude Code session is doing. Called by hooks.
+
+Usage:
+    claude-light w|n|r|i|end      working / needs you / ready / idle / session over
+    claude-light --test           cycle the light through every mode (about 12 s)
+    claude-light --status         print what the hub thinks (hub mode only)
+
+Claude Code hooks pass a JSON object on stdin; its session_id lets the hub combine
+several sessions. Only the session id and the one-letter state leave this machine.
+
+Where it sends, from ~/.config/claude-status-light/client.conf (KEY=value lines) or
+the matching CLAUDE_LIGHT_* environment variables, which win:
+    hub=https://charon.example.ts.net/status-light    # CLAUDE_LIGHT_HUB
+    token=...                                         # CLAUDE_LIGHT_TOKEN
+    channel=home                                      # CLAUDE_LIGHT_CHANNEL (e.g. work)
+    serial=/dev/ttyACM0   or   COM5                   # CLAUDE_LIGHT_SERIAL
+With `serial` set, it writes straight to a light plugged into this computer over USB
+(for networks the light can't join, e.g. office Wi-Fi), combining this machine's
+sessions itself. Otherwise it posts to the hub.
+
+It never fails the hook: every error is swallowed, and it gives up after ~2 s.
+"""
+
+import json
+import os
+import sys
+import threading
+import time
+import urllib.request
+from pathlib import Path
+
+STATES = ("w", "n", "r", "i", "end")
+PRIORITY = {"n": 3, "w": 2, "r": 1, "i": 0}
+STALE = {"r": 60, "w": 20 * 60, "n": 3 * 60 * 60}  # same rules as the hub
+CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "claude-status-light"
+TIMEOUT = 2.0
+
+
+def load_config() -> dict:
+    conf = {}
+    path = CONFIG_DIR / "client.conf"
+    try:
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                conf[key.strip().lower()] = value.strip()
+    except OSError:
+        pass
+    for key in ("hub", "token", "channel", "serial"):
+        env = os.environ.get("CLAUDE_LIGHT_" + key.upper())
+        if env:
+            conf[key] = env
+    conf.setdefault("channel", "home")
+    return conf
+
+
+def hook_session_id() -> str:
+    """session_id from the hook's JSON on stdin, without ever blocking for long."""
+    if sys.stdin is None or sys.stdin.isatty():
+        return "manual"
+    box = {}
+
+    def read():
+        try:
+            box["data"] = sys.stdin.read()
+        except Exception:
+            pass
+
+    t = threading.Thread(target=read, daemon=True)
+    t.start()
+    t.join(0.5)
+    try:
+        return str(json.loads(box.get("data") or "{}").get("session_id") or "manual")
+    except (ValueError, AttributeError):
+        return "manual"
+
+
+def send_hub(conf: dict, session: str, state: str) -> str:
+    body = json.dumps({"session": session, "state": state, "channel": conf["channel"]}).encode()
+    req = urllib.request.Request(conf["hub"].rstrip("/") + "/api/event", data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Authorization", "Bearer " + conf.get("token", ""))
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        return json.loads(resp.read()).get("mode", "?")
+
+
+def local_mode(session: str, state: str) -> str:
+    """Combine this machine's sessions (serial mode) in a small state file."""
+    path = CONFIG_DIR / "serial-sessions.json"
+    now = time.time()
+    try:
+        sessions = json.loads(path.read_text())
+    except (OSError, ValueError):
+        sessions = {}
+    if state in ("i", "end"):
+        sessions.pop(session, None)
+    else:
+        sessions[session] = [state, now]
+    best = "i"
+    for sid, (st, since) in list(sessions.items()):
+        if now - since >= STALE.get(st, 0):
+            del sessions[sid]
+        elif PRIORITY[st] > PRIORITY[best]:
+            best = st
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(sessions))
+        os.replace(tmp, path)
+    except OSError:
+        pass
+    return best
+
+
+def send_serial(port: str, mode: str) -> None:
+    # USB serial on the XIAO ignores the baud rate, so a plain file write is enough
+    # (no pyserial needed). On Windows the port is opened as \\.\COMn.
+    if os.name == "nt" and not port.startswith("\\\\"):
+        port = "\\\\.\\" + port
+    with open(port, "wb", buffering=0) as f:
+        f.write(mode.encode())
+
+
+def emit(conf: dict, session: str, state: str) -> str:
+    if conf.get("serial"):
+        mode = local_mode(session, state)
+        send_serial(conf["serial"], mode)
+        return mode
+    if conf.get("hub"):
+        return send_hub(conf, session, state)
+    raise RuntimeError("no hub or serial configured (see client.conf)")
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    conf = load_config()
+    try:
+        if args == ["--status"]:
+            req = urllib.request.Request(
+                conf["hub"].rstrip("/") + "/api/state?channel=" + conf["channel"])
+            req.add_header("Authorization", "Bearer " + conf.get("token", ""))
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+                print(resp.read().decode().strip())
+            return 0
+        if args == ["--test"]:
+            for state in ("w", "n", "r", "end"):
+                print(f"{state} -> light shows {emit(conf, 'claude-light-test', state)}")
+                time.sleep(3)
+            return 0
+        if len(args) != 1 or args[0] not in STATES:
+            print(__doc__.split("\n\n")[1], file=sys.stderr)
+            return 0
+        emit(conf, hook_session_id(), args[0])
+    except Exception as exc:  # never break Claude Code over a light
+        if os.environ.get("CLAUDE_LIGHT_DEBUG") or sys.stdout.isatty():
+            print(f"claude-light: {exc}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
