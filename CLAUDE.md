@@ -6,7 +6,8 @@ Project context for Claude Code. Read this first.
 A cute desk status light for Claude Code (and ideally T3 Code, Codex, ChatGPT): an Adafruit Flora driving a 12-LED NeoPixel ring, housed in a 3D-printed cluster of translucent mushrooms. The owner designs the model herself in Onshape (switched from Blender, 2026-11-20), so teach and review step by step rather than generating CAD.
 
 ## Hardware (decided)
-- Adafruit Flora v3 (45 mm round, 7 mm thick), 12-LED NeoPixel ring (36.8 mm OD, 23.3 mm ID, 3.6 mm thick).
+- Adafruit Flora v3 (45 mm round, 7 mm thick), 12-LED NeoPixel ring (36.8 mm OD, 23.3 mm ID, 3.6 mm thick; owner measured it, ignore the 6.7 mm figure on DigiKey's forum).
+- Ring type is a firmware option (RGBW 0/1). Current prototype ring: RGB (Adafruit 1643). Planned main ring: RGBW Natural White ~4500K (Adafruit 2852, DigiKey 1528-1604-ND) for pastels and whites. A second, simpler light may use either type.
 - Wiring: ring PWR -> Flora VBATT, GND -> GND, IN -> D6 (never OUT). Add a 300-500 ohm resistor on the data wire next to the ring and a 1000 uF capacitor across ring power if possible.
 - Soldering equipment not available yet; prototyping with alligator clips. Linux host.
 
