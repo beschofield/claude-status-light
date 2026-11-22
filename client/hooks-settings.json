@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart":     [{ "hooks": [{ "type": "command", "command": "~/.local/bin/claude-light i", "timeout": 5 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "~/.local/bin/claude-light w", "timeout": 5 }] }],
+    "PostToolUse":      [{ "hooks": [{ "type": "command", "command": "~/.local/bin/claude-light w", "timeout": 5 }] }],
+    "Notification":     [{ "matcher": "permission_prompt|elicitation_dialog",
+                           "hooks": [{ "type": "command", "command": "~/.local/bin/claude-light n", "timeout": 5 }] }],
+    "Stop":             [{ "hooks": [{ "type": "command", "command": "~/.local/bin/claude-light r", "timeout": 5 }] }],
+    "SessionEnd":       [{ "hooks": [{ "type": "command", "command": "~/.local/bin/claude-light end", "timeout": 5 }] }]
+  }
+}

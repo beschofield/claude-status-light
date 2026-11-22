@@ -1,11 +1,18 @@
 # claude-status-light
 
-A Flora + NeoPixel ring desk light that shows what Claude Code is doing, built into a 3D-printed mushroom cluster.
+Little desk lights that show what Claude Code is doing: **blue** while it works, **amber**
+when it needs you, **green** when it's done. Each light is a Seeed XIAO ESP32-C3 and a
+12-LED NeoPixel ring (RGB or RGBW). The first one lives in a 3D-printed mushroom cluster.
 
-- `firmware/`: Flora sketch (flash with the Arduino IDE).
-- `hooks/`: `light.sh` and the Claude Code hook config. Copy `hooks/` to `~/claude-light` and merge `hooks-settings.json` into `~/.claude/settings.json`.
-- `model/`: the enclosure. The real model is in Onshape; `model/ONSHAPE.md` tracks progress. The Python script is an older parametric draft: `pip install -r requirements.txt && python3 -I build_shroom.py out`.
+Every Claude Code session, on any machine, reports to a small hub; each light shows the
+combined state of the sessions on its channel (e.g. `home` or `work`).
 
-See `CLAUDE.md` for wiring, decisions and open items.
+| Folder | What |
+|---|---|
+| `hub/` | the status hub (Python, no dependencies) + systemd unit + tests |
+| `client/` | `claude-light`, called by Claude Code hooks, + the hook config |
+| `firmware/` | XIAO firmware (PlatformIO), ready-to-flash images in `firmware/images/` |
+| `docs/` | `setup.md` (hub, hooks, a new light), `hardware.md` (parts, wiring) |
+| `model/` | the enclosure: modeled in Onshape, progress in `model/ONSHAPE.md` |
 
-Quick test: `hooks/light.sh w` (working), `n` (needs you), `r` (ready), `i` (off). Needs access to the serial port (`dialout` group on Linux).
+Start with `docs/setup.md`.
