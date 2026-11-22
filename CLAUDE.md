@@ -11,6 +11,15 @@ A cute desk status light for Claude Code (and ideally T3 Code, Codex, ChatGPT): 
 - Wiring: ring PWR -> Flora VBATT, GND -> GND, IN -> D6 (never OUT). Add a 300-500 ohm resistor on the data wire next to the ring and a 1000 uF capacitor across ring power if possible.
 - Soldering equipment not available yet; prototyping with alligator clips. Linux host.
 
+## Future lights: XIAO ESP32-C3 (planned, 2026-11-21)
+The owner may build more, simpler status lights (no complex enclosure: a jar or frosted cup as diffuser).
+For those, use a Seeed XIAO ESP32-C3 instead of a Flora (DigiKey 1597-113991054-ND, ~$5.25; alt: Adafruit QT Py ESP32-S3, 1528-5700-ND, ~$12.50, long lead time).
+- Why: Wi-Fi lets hooks on charon reach the light directly over LAN/Tailscale (no desk-side USB bridge); tiny (21 x 17.5 mm), USB-C, cheap.
+- Wiring: ring PWR -> 5V pin, GND -> GND, data via 470 ohm -> a GPIO. 3.3 V data usually drives NeoPixels fine on short wires; add a level shifter if colors glitch.
+- Antenna: external U.FL flex antenna (included); stick it to an inside wall, away from metal. Headers not included.
+- Firmware TODO: port the sketch (same NeoPixel code, RGBW option applies), add a Wi-Fi/HTTP mode for hooks, keep USB serial as fallback.
+- Could also replace the Flora in the mushroom (much smaller pocket); owner's call.
+
 ## Behavior (decided)
 All mushrooms show ONE shared status so animations can chase across the cluster:
 - w = working: blue comet; n = needs input: amber breathing; r = ready: green fill then glow, fades after 60 s; i = idle: off.
