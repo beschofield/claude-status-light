@@ -15,7 +15,17 @@
 // and put it here.
 #define PIXEL_OFFSET 0
 
+// Ring type: 0 = RGB ring (e.g. Adafruit 1643), 1 = RGBW ring (Adafruit 2851/2852/2853).
+// PlatformIO sets this per build env; in the Arduino IDE, edit the default here.
+#ifndef RGBW
+#define RGBW 0
+#endif
+
+#if RGBW
+Adafruit_NeoPixel ring(N, PIN, NEO_GRBW + NEO_KHZ800);
+#else
 Adafruit_NeoPixel ring(N, PIN, NEO_GRB + NEO_KHZ800);
+#endif
 char mode = 'i';
 uint32_t t0 = 0;
 
@@ -24,10 +34,18 @@ void setMode(char m) {
   t0 = millis();
 }
 
-void setRGB(int i, float v, uint8_t r, uint8_t g, uint8_t b) {
+// Colors take an optional white amount w (0-255) for pastels and true whites.
+// On an RGBW ring it drives the white LED; on an RGB ring it is mixed into
+// r, g and b, so the same color reads similarly (a bit bluer) on both.
+void setRGB(int i, float v, uint8_t r, uint8_t g, uint8_t b, uint8_t w = 0) {
   if (v < 0) v = 0;
   if (v > 1) v = 1;
-  ring.setPixelColor((i + PIXEL_OFFSET) % N, ring.Color(r * v, g * v, b * v));
+#if RGBW
+  uint32_t c = ring.Color(r * v, g * v, b * v, w * v);
+#else
+  uint32_t c = ring.Color(min(255, r + w) * v, min(255, g + w) * v, min(255, b + w) * v);
+#endif
+  ring.setPixelColor((i + PIXEL_OFFSET) % N, c);
 }
 
 void setup() {
