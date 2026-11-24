@@ -51,8 +51,12 @@ blocking sockets). Keep it that way. Guide: docs/work-usb.md.
 ## Behavior (decided)
 w = working: blue comet; n = needs you: amber breathing; r = ready: green fill then glow,
 fades after 60 s; i = idle: off. System looks: purple = setup screen, white dot = joining
-Wi-Fi, red blink = hub unreachable, magenta double blink = bad token. Colors are {r,g,b,w}
-in firmware/src/looks.cpp; the owner wants room for pastels and varied colors.
+Wi-Fi, red blink = hub unreachable, magenta double blink = bad token.
+**All looks live in `firmware/include/looks_table.h`** (one line each: {r,g,b,w}, effect,
+period, low/high %, show ms), modeled on the ghost figure's glow_looks.h. The owner will keep
+editing looks after the lights are built and wants pastels and varied colors: keep looks as
+data in that file, add new effects in src/looks.cpp only when a look needs one, and keep the
+`p` preview listing every look.
 
 ## Status / open items
 - 2026-11-24: XIAOs arrived. One flashed with the RGB Wi-Fi image and joined home Wi-Fi.
@@ -66,4 +70,7 @@ in firmware/src/looks.cpp; the owner wants room for pastels and varied colors.
 - Enclosure: lesson 3 swaps the Flora pocket for a XIAO pocket (model/ONSHAPE.md).
 - Test whether T3 Code triggers the Claude Code hooks. ChatGPT has no hooks (browser
   extension idea). Codex has its own hook/notify config: could call claude-light too.
-- Later: updates over Wi-Fi (partition layout already leaves room).
+- Build order (2026-11-24): home Wi-Fi light first (same hardware as USB), then the work
+  USB light.
+- Later: updates over Wi-Fi for sealed Wi-Fi lights, like the ghost figure's OTA (partition
+  layout already leaves room). USB lights are always plugged in, so they reflash over USB.

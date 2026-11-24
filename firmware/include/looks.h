@@ -17,3 +17,5 @@ char looksMode();
 void looksSetSystem(SystemLook s);
 SystemLook looksSystem();
 void looksFrame();  // draw one frame; call every ~10 ms
+void looksPreview();  // show every look in include/looks_table.h for 3 s each
+uint8_t looksBrightnessStep(int delta);  // live brightness change (not saved); returns the new level

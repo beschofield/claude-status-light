@@ -43,8 +43,17 @@ With PlatformIO on the computer the XIAO is plugged into: `pio run -e xiao_rgb_w
   has buttons to test each mode. Hold **BOOT** 2 s after start-up to reopen setup.
 - **USB builds**: nothing to set up; `claude-light` with `serial=` drives it
   (`docs/work-usb.md`). A stuck blue clears after 20 min of silence, amber after 3 h.
-- USB serial on both (115200): `w` `n` `r` `i` set a mode, `?` prints status, `s` opens the
+- USB serial on both (115200): `w` `n` `r` `i` set a mode, `?` prints status, `p` previews
+  every look (3 s each), `[` / `]` change brightness until the next restart, `s` opens the
   setup screen (Wi-Fi builds). The esptool-js page's Console tab, or `pio device monitor`.
+
+## Changing how it looks
+
+Everything visual is in **`include/looks_table.h`**: one line per look with its color
+(red, green, blue, white), effect (Steady, Breathe, Blink, Spin, Comet, Fill, Pip,
+DoublePip), speed, brightness range and how long it stays. The rules are at the top of that
+file. Edit, rebuild (`pio run`, `python3 tools/make_image.py`), flash the `-update.bin`, then
+type `p` to see them all.
 
 ## What the light shows
 
@@ -59,6 +68,5 @@ With PlatformIO on the computer the XIAO is plugged into: `pio run -e xiao_rgb_w
 | one red blink every 2 s | hub unreachable |
 | two magenta blinks every 2 s | hub rejected the token |
 
-Colors live in `src/looks.cpp` as {r, g, b, w}; pin, LED count, brightness and timings in
-`include/config.h`. HTTPS hubs must use a Let's Encrypt certificate (Tailscale Funnel does);
+Pin, LED count and timings are in `include/config.h`. HTTPS hubs must use a Let's Encrypt certificate (Tailscale Funnel does);
 `tools/make_certs.py` regenerates `include/certs.h`.

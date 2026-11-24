@@ -35,5 +35,5 @@ XIAO D2  ── 470 ohm (near the ring) ── ring IN      (never OUT)
 
 RGB is fine for bold blue/amber/green. RGBW also does soft pastels, warm glows and real
 white, which is what the mushroom light uses. The firmware supports both; flash the matching
-image. Colors are defined once in `firmware/src/looks.cpp` as {r, g, b, w} and look similar
+image. Colors are defined once in `firmware/include/looks_table.h` as {r, g, b, w} and look similar
 on both (on RGB the white part is mixed from r, g and b).

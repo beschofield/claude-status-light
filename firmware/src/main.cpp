@@ -7,6 +7,7 @@
 //     over USB with `claude-light` (serial= in client.conf).
 // Both take single characters over USB serial (115200; any baud works):
 //   w working   n needs you   r ready   i idle   ? print status
+//   p preview every look (include/looks_table.h)   [ ] brightness down/up (until restart)
 //   s open the setup screen (Wi-Fi builds)
 
 #include <Arduino.h>
@@ -37,6 +38,11 @@ static void handleSerial() {
       lastCommandAt = millis();
     } else if (c == '?') {
       statusLine();
+    } else if (c == 'p') {
+      looksPreview();
+    } else if (c == '[' || c == ']') {
+      Serial.printf("brightness %u (set BRIGHTNESS in looks_table.h to keep it)\n",
+                    looksBrightnessStep(c == ']' ? 10 : -10));
 #if USE_WIFI
     } else if (c == 's') {
       netOpenSetup();
