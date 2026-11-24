@@ -1,3 +1,7 @@
+#include "config.h"
+
+#if USE_WIFI  // the whole file: USB-only builds never touch the radio
+
 #include "net.h"
 
 #include <ESPmDNS.h>
@@ -227,3 +231,5 @@ String netStatus() {
   if (settings.hub.length()) s += " (" + settings.hub + ", channel " + settings.channel + ")";
   return s;
 }
+
+#endif  // USE_WIFI

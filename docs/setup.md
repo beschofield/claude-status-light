@@ -1,47 +1,63 @@
 # Setup
 
-Three pieces, set up once each:
+## Choosing how a light connects
+
+Each light is built one of two ways, like choosing RGB or RGBW. The rule: **the light has to
+hear from the machine where Claude Code actually runs** (that's where hooks run), which isn't
+always the computer in front of you.
+
+| | **Wi-Fi + hub** (`_wifi` firmware) | **USB only** (`_usb` firmware) |
+|---|---|---|
+| Use when | Claude Code runs on another machine (e.g. charon, reached over SSH or remotely), or several machines should drive one light | Claude Code runs on the very computer the light plugs into |
+| How | hooks → hub on charon (HTTPS) ← light polls it over Wi-Fi | hooks → USB port → light |
+| Network | light and hooks talk to the hub's public HTTPS address (token-protected) | none at all; the light's radio is off |
+| Needs | the hub running, Wi-Fi with internet | that computer on and awake |
+| Our lights | **home** (sessions run on charon) | **work** (sessions run only on the work laptop) |
+
+Decided 2026-11-24. Why: home sessions run on charon, which has no USB port at the desk, so
+only the hub route can reach them. At work, Claude Code only runs on the work laptop and the
+light sits next to it, so USB covers everything while staying off the network entirely,
+the most conservative option for work IT (see `docs/work-usb.md`).
+
+The rest of this page is the **Wi-Fi + hub** route. For USB only, follow `docs/work-usb.md`.
 
 ```
  Claude Code session ──hook──> claude-light ──HTTPS──> status hub (charon) <──long-poll── light (XIAO)
- (charon, home PC, work laptop)                         combines sessions per channel
+ (charon, home PC, ...)                                 combines sessions per channel
 ```
 
 1. **The hub** runs on charon and is reachable over HTTPS through Tailscale Funnel.
-2. **The client** (`client/claude-light`) is installed on every machine that runs Claude Code,
-   and Claude Code hooks call it.
+2. **The client** (`client/claude-light`) is installed on every machine whose sessions should
+   show, and Claude Code hooks call it.
 3. **Each light** joins Wi-Fi and is told the hub address, the token and its channel.
 
-Channels keep places apart: home sessions post to `home`, the work laptop posts to `work`,
-and each light listens to one channel. Only a session id and a one-letter state are ever sent.
+Channels keep groups of sessions apart (default `home`); each light listens to one channel.
+Only a session id and a one-letter state are ever sent.
 
-## 1. Hub (charon)
+## 1. Hub (charon) — running since 2026-11-24
 
 ```bash
 cd ~/Claude/claude-status-light
-python3 hub/status_hub.py            # first run creates ~/.config/claude-status-light/token; Ctrl-C
 cp hub/status-hub.service ~/.config/systemd/user/
-systemctl --user daemon-reload && systemctl --user enable --now status-hub
+systemctl --user daemon-reload && systemctl --user enable --now status-hub   # first run creates the token
 curl -s localhost:8787/healthz       # -> ok
-```
-
-Publish it under a path on charon's existing Funnel (the ghost figure keeps `/`):
-
-```bash
-sudo tailscale funnel --bg --set-path /status-light http://127.0.0.1:8787
+tailscale funnel --bg --set-path /status-light http://127.0.0.1:8787
 curl -s https://charon.<tailnet>.ts.net/status-light/healthz    # -> ok
 ```
 
-The hub address is then `https://charon.<tailnet>.ts.net/status-light`. Every request except
+The hub address is `https://charon.<tailnet>.ts.net/status-light`. Every request except
 `/healthz` needs the token from `~/.config/claude-status-light/token`.
+
+To unpublish only this path (not the ghost figure's `/`):
+`tailscale funnel --https=443 --set-path /status-light off`. The plain `--https=443 off` that
+Tailscale suggests would take down the ghost figure too.
 
 Tests: `python3 -m unittest discover -s hub`
 
-## 2. Client + hooks (each machine that runs Claude Code)
+## 2. Client + hooks (each machine whose sessions should show)
 
 Needs Python 3 (no packages).
 
-**Linux / macOS (charon, home PC):**
 ```bash
 mkdir -p ~/.local/bin ~/.config/claude-status-light
 cp client/claude-light ~/.local/bin/ && chmod +x ~/.local/bin/claude-light
@@ -52,27 +68,19 @@ channel=home
 EOF
 claude-light --test        # the light cycles blue, amber, green, off
 ```
+On charon itself, use `hub=http://127.0.0.1:8787` so its sessions never leave the machine.
 Then merge `client/hooks-settings.json` into `~/.claude/settings.json` (the `"hooks"` block).
-
-**Work laptop:** the same, with `channel=work`. Check that your employer is fine with a
-hook sending "working/idle" pings to a personal server; nothing else is sent.
-- Windows: put `claude-light` anywhere, create `%USERPROFILE%\.config\claude-status-light\client.conf`,
-  and use `python C:/path/to/claude-light w` (etc.) as the hook commands.
-- If the light can't join the office Wi-Fi (employee-login networks or sign-in pages don't
-  work with it), plug it into the laptop by USB and add `serial=COM5` (Windows) or
-  `serial=/dev/cu.usbmodem...` (macOS) to `client.conf`. The client then writes to the light
-  directly and combines the laptop's sessions itself; no hub or Wi-Fi involved.
 
 Debug: `CLAUDE_LIGHT_DEBUG=1 claude-light w` prints errors; `claude-light --status` shows
 what the hub sees.
 
-## 3. A light
+## 3. A Wi-Fi light
 
-1. Flash it: see `firmware/README.md`.
+1. Flash `status-light-<ring>_wifi-full.bin`: see `firmware/README.md`.
 2. On first start it opens a Wi-Fi network called **StatusLight-Setup** and breathes purple.
    Join it from a phone; the setup page opens (or browse to 192.168.4.1).
 3. Pick the Wi-Fi, and fill in **name** (e.g. `desk-light`), **hub address**, **token** and
-   **channel** (`home` or `work`). Save. The light restarts and joins.
+   **channel**. Save. The light restarts and joins.
 4. Check: `http://<name>.local` shows what it's displaying and lets you test each mode.
 
 To change settings later: hold **BOOT** for 2 s (or type `s` on USB serial) to reopen the
@@ -80,6 +88,6 @@ setup page. Leaving the token blank keeps the saved one.
 
 ## Adding another light
 
-Build or buy the hardware (`docs/hardware.md`), flash the right image (RGB or RGBW), and do
-step 3 with a new name. Same channel = shows the same sessions; new channel = point some
-machine's `client.conf` at it.
+Pick the ring (RGB/RGBW) and the connection (Wi-Fi/USB) with the table above, build the
+hardware (`docs/hardware.md`), flash the matching image, then do step 3 (Wi-Fi) or
+`docs/work-usb.md` (USB).

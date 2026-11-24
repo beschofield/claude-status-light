@@ -1,10 +1,20 @@
 #pragma once
+#include <stdint.h>
 // Hardware and timing settings shared by every light. Per-light settings (name, hub,
 // token, channel) are entered on the setup screen and saved on the board instead.
 
 #ifndef RGBW
 #define RGBW 0  // 0 = RGB ring, 1 = RGBW ring. Set per build env in platformio.ini.
 #endif
+
+#ifndef USE_WIFI
+#define USE_WIFI 1  // 1 = Wi-Fi + hub, 0 = USB only (radio never turned on). Set per build env.
+#endif
+
+// USB-only lights hear nothing when the computer sleeps mid-session, so a stuck state
+// clears itself after the same limits the hub uses.
+constexpr uint32_t USB_WORKING_STALE_MS = 20UL * 60 * 1000;
+constexpr uint32_t USB_NEEDS_STALE_MS = 3UL * 60 * 60 * 1000;
 
 constexpr int LED_PIN = 4;          // XIAO pin D2 (GPIO4) -> 470 ohm -> ring "IN"
 constexpr int LED_COUNT = 12;
