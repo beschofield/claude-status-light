@@ -70,8 +70,9 @@ data in that file, add new effects in src/looks.cpp only when a look needs one, 
 - Enclosure: lesson 3 swaps the Flora pocket for a XIAO pocket (model/ONSHAPE.md).
 - Test whether T3 Code triggers the Claude Code hooks. ChatGPT has no hooks (browser
   extension idea). Codex has its own hook/notify config: could call claude-light too.
-- Order (2026-11-24): the first physical prototype is the **USB-only work light** (RGB ring
-  1643 on a XIAO). Software work goes home Wi-Fi path first (hooks on charon, hub hardening),
-  then the work USB client (needs the work laptop's OS / Python answer).
+- Order (2026-11-24): the first physical prototype is the **home Wi-Fi light** (RGB ring
+  1643 on the XIAO already flashed with the Wi-Fi image and on home Wi-Fi). Software: home
+  path first (hooks on charon once the light works, hub hardening), then the work USB light
+  and client (needs the work laptop's OS / Python answer).
 - Later: updates over Wi-Fi for sealed Wi-Fi lights, like the ghost figure's OTA (partition
   layout already leaves room). USB lights are always plugged in, so they reflash over USB.
