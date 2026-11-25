@@ -29,7 +29,8 @@ import os
 import sys
 import threading
 import time
-import urllib.request
+# No networking module is imported here on purpose: urllib is imported only inside the two
+# hub-route functions, so in USB (serial) mode the network code is never even loaded.
 from pathlib import Path
 
 STATES = ("w", "n", "r", "i", "end")
@@ -80,6 +81,8 @@ def hook_session_id() -> str:
 
 
 def send_hub(conf: dict, session: str, state: str) -> str:
+    import urllib.request  # hub route only
+
     body = json.dumps({"session": session, "state": state, "channel": conf["channel"]}).encode()
     req = urllib.request.Request(conf["hub"].rstrip("/") + "/api/event", data=body, method="POST")
     req.add_header("Content-Type", "application/json")
@@ -107,9 +110,11 @@ def local_mode(session: str, state: str) -> str:
         elif PRIORITY[st] > PRIORITY[best]:
             best = st
     try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        CONFIG_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(sessions))
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # owner-only
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(sessions))
         os.replace(tmp, path)
     except OSError:
         pass
@@ -144,6 +149,8 @@ def main() -> int:
                 path = CONFIG_DIR / "serial-sessions.json"
                 print(path.read_text() if path.exists() else "{}  (no sessions yet)")
                 return 0
+            import urllib.request  # hub route only
+
             req = urllib.request.Request(
                 conf["hub"].rstrip("/") + "/api/state?channel=" + conf["channel"])
             req.add_header("Authorization", "Bearer " + conf.get("token", ""))

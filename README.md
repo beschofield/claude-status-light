@@ -16,4 +16,5 @@ Code drives it directly; used at work). See `docs/setup.md` to choose.
 | `docs/` | `setup.md` (choosing Wi-Fi vs USB, hub, hooks), `work-usb.md` (offline work light), `hardware.md` (parts, wiring) |
 | `model/` | the enclosure: modeled in Onshape, progress in `model/ONSHAPE.md` |
 
-Start with `docs/setup.md`.
+Start with `docs/setup.md`. For the work light's security and implementation brief, see
+`docs/WORK-LIGHT-BRIEF.md`.
