@@ -54,8 +54,10 @@ Because it's public, the hub is locked down (hardened 2026-11-24):
 - **Sandboxed service** (`hub/status-hub.service`): it sees an empty home folder except its own
   code and token (read-only), can't write outside a private /tmp, can't gain privileges, and has
   memory, thread and system-call limits. Tested: from inside, `~/.ssh` and other repos don't exist.
-- **In the code**: at most 32 connections at once (extra ones are closed), idle connections
-  dropped after 70 s, requests over 4 KB refused, token only accepted in the header.
+- **In the code**: the token is checked before any request body is read (header only,
+  never in the URL); refused requests get their connection closed; a body must arrive within
+  10 s and be under 4 KB; at most 32 connections at once (extra ones are closed); idle
+  connections dropped after 120 s (longer than the Funnel proxy's own 90 s, so no lost events).
 - Listens on 127.0.0.1 only; Tailscale Funnel handles HTTPS in front of it.
 
 To unpublish only this path (not the ghost figure's `/`):

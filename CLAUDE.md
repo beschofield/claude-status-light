@@ -64,8 +64,9 @@ data in that file, add new effects in src/looks.cpp only when a look needs one, 
 - Hooks on charon not installed yet: wait until the wired light passes `claude-light --test`.
   On charon use `hub=http://127.0.0.1:8787`.
 - Security: owner is cautious about the public hub. Hardened 2026-11-24: sandboxed systemd
-  unit (sees only hub/ and its token, read-only), 32-connection cap, 70 s idle timeout, 4 KB
-  body limit, token header-only. Keep it that way when changing the hub.
+  unit (sees only hub/ and its token, read-only), token checked before reading bodies (header-only),
+  refused requests closed, 10 s body deadline, 4 KB body limit, 32-connection cap, 120 s idle
+  timeout (must stay above the Funnel proxy's 90 s). Keep it that way when changing the hub.
 - Work laptop OS unknown; the USB client needs Python 3 there. If Python isn't allowed, write
   a PowerShell/zsh-only client (still no network).
 - Enclosure: lesson 3 swaps the Flora pocket for a XIAO pocket (model/ONSHAPE.md).

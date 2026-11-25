@@ -105,6 +105,41 @@ class HubHTTP(unittest.TestCase):
         self.assertEqual(conn.getresponse().status, 413)
         conn.close()
 
+    def raw_post(self, headers: dict, body: bytes = b"", timeout: float = 5):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1], timeout=timeout)
+        conn.putrequest("POST", "/api/event")
+        for k, v in headers.items():
+            conn.putheader(k, v)
+        conn.endheaders()
+        if body:
+            conn.send(body)
+        return conn
+
+    def test_unauthorized_post_refused_before_body_and_closed(self):
+        start = time.monotonic()
+        conn = self.raw_post({"Content-Length": "4000"})  # promises a body, never sends it
+        resp = conn.getresponse()
+        self.assertEqual(resp.status, 401)
+        self.assertEqual(resp.getheader("Connection"), "close")
+        self.assertLess(time.monotonic() - start, 2)  # didn't wait for the body
+        conn.close()
+
+    def test_slow_body_times_out(self):
+        import status_hub
+        old = status_hub.BODY_TIMEOUT
+        status_hub.BODY_TIMEOUT = 0.5
+        try:
+            conn = self.raw_post({"Content-Length": "40", "Authorization": f"Bearer {self.TOKEN}"}, b"{")
+            self.assertEqual(conn.getresponse().status, 408)
+            conn.close()
+        finally:
+            status_hub.BODY_TIMEOUT = old
+
+    def test_bad_content_length(self):
+        conn = self.raw_post({"Content-Length": "abc", "Authorization": f"Bearer {self.TOKEN}"})
+        self.assertEqual(conn.getresponse().status, 400)
+        conn.close()
+
     def test_connection_cap(self):
         # Fill all 4 slots with idle connections; the next one is closed without an answer.
         port = self.server.server_address[1]

@@ -21,7 +21,8 @@ RestartSec=3
 
 # --- sandbox ---
 ProtectHome=tmpfs
-BindReadOnlyPaths=%h/Claude/claude-status-light/hub %h/.config/claude-status-light
+# "-": if the token folder is missing the hub still starts and says to run --init-token.
+BindReadOnlyPaths=%h/Claude/claude-status-light/hub -%h/.config/claude-status-light
 ProtectSystem=strict
 PrivateTmp=yes
 PrivateDevices=yes
