@@ -17,7 +17,8 @@ Modes (one character, same as the firmware):
     i  idle        (nothing going on)
 Priority when sessions disagree: n > w > r > i.
 
-API (all except /healthz need the token, as `Authorization: Bearer TOKEN` or `?token=`):
+API (all except /healthz need the token, as an `Authorization: Bearer TOKEN` header; a token
+in the URL is not accepted, so it never lands in logs):
     POST /api/event   {"session": "...", "state": "w|n|r|i|end", "channel": "home"}
     GET  /api/light?channel=home&have=i&wait=25
          Plain-text mode character. Returns as soon as the mode differs from `have`,
@@ -47,6 +48,13 @@ READY_SECONDS = 60           # how long "ready" shows after a session stops
 WORKING_STALE = 20 * 60      # a "working" session silent this long is assumed gone
 NEEDS_STALE = 3 * 60 * 60    # same for "needs you" (e.g. a killed session never answered)
 MAX_WAIT = 55                # longest long-poll, below common proxy idle timeouts
+MAX_CONNECTIONS = 32         # simultaneous connections; more are closed at once
+# Seconds a kept-alive connection may sit silent. Must exceed MAX_WAIT, and the idle timeout
+# of the Funnel proxy in front (Go's default is 90 s): if the hub closed first, a request the
+# proxy sent on that connection at the same moment would fail with a 502.
+IDLE_TIMEOUT = 120
+BODY_TIMEOUT = 10            # seconds the whole request body may take to arrive
+MAX_BODY = 4096              # bytes; event bodies are ~100
 PRIORITY = {"n": 3, "w": 2, "r": 1, "i": 0}
 STATES = set(PRIORITY) | {"end"}
 DEFAULT_CHANNEL = "home"
@@ -131,22 +139,83 @@ def load_token() -> str:
     return token
 
 
+class HubServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer with a cap on simultaneous connections.
+
+    The hub is reachable from the internet, so a flood of connections must not pile up
+    threads: past MAX_CONNECTIONS, new ones are closed straight away.
+    """
+
+    daemon_threads = True
+
+    def __init__(self, *args, max_connections: int = MAX_CONNECTIONS, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.slots = threading.BoundedSemaphore(max_connections)
+
+    def process_request(self, request, client_address):
+        if not self.slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+
 def make_handler(hub: Hub, token: str):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"  # keep-alive, so lights reuse one TLS connection
+        timeout = IDLE_TIMEOUT  # drop connections that go quiet (slow or abandoned clients)
 
         def log_message(self, fmt, *args):  # quiet: lights poll constantly
             if os.environ.get("STATUS_HUB_VERBOSE"):
                 super().log_message(fmt, *args)
 
         def _send(self, code: int, body: str, ctype: str = "text/plain") -> None:
+            if code >= 400:
+                # Refused requests don't get to keep a connection (and a slot) open.
+                self.close_connection = True
             data = body.encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype + "; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
+            if self.close_connection:
+                self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(data)
+
+        def _read_body(self, length: int):
+            """The request body, or None if it didn't all arrive within BODY_TIMEOUT.
+
+            The socket timeout applies per read, so a client dripping one byte at a time
+            could otherwise hold its slot for hours; this caps the whole body instead.
+            """
+            deadline = time.monotonic() + BODY_TIMEOUT
+            chunks, remaining = [], length
+            try:
+                while remaining > 0:
+                    left = deadline - time.monotonic()
+                    if left <= 0:
+                        return None
+                    self.connection.settimeout(left)
+                    chunk = self.rfile.read1(remaining)
+                    if not chunk:
+                        return None
+                    chunks.append(chunk)
+                    remaining -= len(chunk)
+            except OSError:  # includes socket timeouts
+                return None
+            finally:
+                self.connection.settimeout(IDLE_TIMEOUT)
+            return b"".join(chunks)
 
         def _route(self):
             url = urlparse(self.path)
@@ -156,8 +225,9 @@ def make_handler(hub: Hub, token: str):
             return path, query
 
         def _authorized(self, query: dict) -> bool:
+            # Header only: a token in the URL could end up in logs or browser history.
             header = self.headers.get("Authorization", "")
-            given = header[7:].strip() if header.startswith("Bearer ") else query.get("token", "")
+            given = header[7:].strip() if header.startswith("Bearer ") else ""
             return secrets.compare_digest(given.encode(), token.encode())
 
         def do_GET(self):
@@ -179,15 +249,23 @@ def make_handler(hub: Hub, token: str):
 
         def do_POST(self):
             path, query = self._route()
-            try:
-                length = int(self.headers.get("Content-Length", 0))
-                raw = self.rfile.read(min(length, 4096)) if length else b""
-            except ValueError:
-                raw = b""
+            # Everything that can be decided from the headers is, before reading any body:
+            # a client without the token never gets to send one.
             if not self._authorized(query):
                 return self._send(401, "bad token\n")
             if path != "/api/event":
                 return self._send(404, "not found\n")
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+            except ValueError:
+                return self._send(400, "bad Content-Length\n")
+            if length < 0:
+                return self._send(400, "bad Content-Length\n")
+            if length > MAX_BODY:
+                return self._send(413, "request too large\n")
+            raw = self._read_body(length) if length else b""
+            if raw is None:
+                return self._send(408, "request body too slow\n")
             try:
                 body = json.loads(raw or b"{}")
                 state = str(body.get("state", ""))
@@ -207,10 +285,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--init-token", action="store_true",
+                        help="create the token file if missing, print where it is, and exit")
     args = parser.parse_args()
+    path = CONFIG_DIR / "token"
+    if args.init_token:
+        os.environ.pop("STATUS_HUB_TOKEN", None)  # this is about the file the service reads
+        load_token()
+        print(f"token file: {path}")
+        return
+    try:
+        token = load_token()
+    except OSError as exc:  # the sandboxed service can't create it (read-only)
+        sys.exit(f"no hub token ({exc}). Run once: python3 {Path(__file__).resolve()} --init-token")
     hub = Hub()
-    server = ThreadingHTTPServer((args.bind, args.port), make_handler(hub, load_token()))
-    server.daemon_threads = True
+    server = HubServer((args.bind, args.port), make_handler(hub, token))
     print(f"status hub on http://{args.bind}:{args.port}", file=sys.stderr)
     try:
         server.serve_forever()
