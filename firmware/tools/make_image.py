@@ -3,10 +3,10 @@
 Usage, from firmware/ after `pio run`:
     python3 tools/make_image.py
 
-For each ring type (rgb, rgbw) it writes to images/:
-    status-light-<ring>-full.bin    flash at 0x0: first time, or to recover a board.
+For each build (rgb_wifi, rgbw_wifi, rgb_usb, rgbw_usb) it writes to images/:
+    status-light-<build>-full.bin   flash at 0x0: first time, or to recover a board.
                                     Wipes the saved Wi-Fi and settings.
-    status-light-<ring>-update.bin  flash at 0xe000: every later update. Keeps Wi-Fi and settings.
+    status-light-<build>-update.bin  flash at 0xe000: every later update. Keeps Wi-Fi and settings.
 
 Flash layout (min_spiffs.csv): bootloader 0x0, partition table 0x8000, saved Wi-Fi and
 settings (nvs) 0x9000, boot selector (otadata) 0xe000, app 0x10000. The update image
@@ -33,18 +33,18 @@ def merge(out: Path, parts: list[tuple[str, Path]], target_offset: str) -> None:
 
 def main() -> None:
     OUT.mkdir(exist_ok=True)
-    for ring in ("rgb", "rgbw"):
-        build = Path(f".pio/build/xiao_{ring}")
+    for env in ("rgb_wifi", "rgbw_wifi", "rgb_usb", "rgbw_usb"):
+        build = Path(f".pio/build/xiao_{env}")
         if not (build / "firmware.bin").exists():
-            print(f"skip {ring}: run `pio run -e xiao_{ring}` first")
+            print(f"skip {env}: run `pio run -e xiao_{env}` first")
             continue
         app = build / "firmware.bin"
-        full = OUT / f"status-light-{ring}-full.bin"
-        update = OUT / f"status-light-{ring}-update.bin"
+        full = OUT / f"status-light-{env}-full.bin"
+        update = OUT / f"status-light-{env}-update.bin"
         merge(full, [("0x0", build / "bootloader.bin"), ("0x8000", build / "partitions.bin"),
                      ("0xe000", BOOT_APP0), ("0x10000", app)], "0x0")
         merge(update, [("0xe000", BOOT_APP0), ("0x10000", app)], "0xe000")
-        print(f"{ring}: {full} ({full.stat().st_size // 1024} KB), {update}")
+        print(f"{env}: {full} ({full.stat().st_size // 1024} KB), {update}")
 
 
 if __name__ == "__main__":

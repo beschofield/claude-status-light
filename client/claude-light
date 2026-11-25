@@ -15,9 +15,11 @@ the matching CLAUDE_LIGHT_* environment variables, which win:
     token=...                                         # CLAUDE_LIGHT_TOKEN
     channel=home                                      # CLAUDE_LIGHT_CHANNEL (e.g. work)
     serial=/dev/ttyACM0   or   COM5                   # CLAUDE_LIGHT_SERIAL
-With `serial` set, it writes straight to a light plugged into this computer over USB
-(for networks the light can't join, e.g. office Wi-Fi), combining this machine's
-sessions itself. Otherwise it posts to the hub.
+Two routes, chosen by which of these is set (see docs/setup.md):
+  serial  USB only. Writes straight to a light plugged into this computer and combines
+          this machine's sessions itself. Makes NO network connections at all, even if a
+          hub is also configured (used for the work laptop; see docs/work-usb.md).
+  hub     Posts to the status hub, for lights that show sessions from other machines.
 
 It never fails the hook: every error is swallowed, and it gives up after ~2 s.
 """
@@ -138,6 +140,10 @@ def main() -> int:
     conf = load_config()
     try:
         if args == ["--status"]:
+            if conf.get("serial"):  # USB route: local state only, never the network
+                path = CONFIG_DIR / "serial-sessions.json"
+                print(path.read_text() if path.exists() else "{}  (no sessions yet)")
+                return 0
             req = urllib.request.Request(
                 conf["hub"].rstrip("/") + "/api/state?channel=" + conf["channel"])
             req.add_header("Authorization", "Bearer " + conf.get("token", ""))

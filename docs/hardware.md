@@ -5,8 +5,8 @@
 | Part | DigiKey | Notes |
 |---|---|---|
 | Seeed XIAO ESP32-C3 | 1597-113991054-ND | ~$5. Wi-Fi, USB-C, 21 x 17.8 mm. Comes with a flex antenna on a U.FL lead; no headers. |
-| 12-LED NeoPixel ring, **RGB** | 1528-1102-ND (Adafruit 1643) | Saturated colors. Firmware: `xiao_rgb`. |
-| 12-LED NeoPixel ring, **RGBW** | 1528-1604-ND natural ~4500K (2852), 1528-1605-ND warm ~3000K (2851), 1528-1603-ND cool ~6000K (2853) | Adds a real white LED: clean whites and pastels. Firmware: `xiao_rgbw`. |
+| 12-LED NeoPixel ring, **RGB** | 1528-1102-ND (Adafruit 1643) | Saturated colors. Firmware: `xiao_rgb_wifi` or `xiao_rgb_usb`. |
+| 12-LED NeoPixel ring, **RGBW** | 1528-1604-ND natural ~4500K (2852), 1528-1605-ND warm ~3000K (2851), 1528-1603-ND cool ~6000K (2853) | Adds a real white LED: clean whites and pastels. Firmware: `xiao_rgbw_wifi` or `xiao_rgbw_usb`. |
 | 470 ohm resistor | makerspace | On the data wire, close to the ring. |
 | 220-470 uF capacitor, 6.3 V+ | makerspace | Across ring power, optional but recommended. |
 | USB-C **data** cable | any | Powers the light; also the USB fallback and for flashing. |
@@ -35,5 +35,5 @@ XIAO D2  ── 470 ohm (near the ring) ── ring IN      (never OUT)
 
 RGB is fine for bold blue/amber/green. RGBW also does soft pastels, warm glows and real
 white, which is what the mushroom light uses. The firmware supports both; flash the matching
-image. Colors are defined once in `firmware/src/looks.cpp` as {r, g, b, w} and look similar
+image. Colors are defined once in `firmware/include/looks_table.h` as {r, g, b, w} and look similar
 on both (on RGB the white part is mixed from r, g and b).
