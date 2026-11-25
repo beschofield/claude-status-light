@@ -17,7 +17,8 @@ Modes (one character, same as the firmware):
     i  idle        (nothing going on)
 Priority when sessions disagree: n > w > r > i.
 
-API (all except /healthz need the token, as `Authorization: Bearer TOKEN` or `?token=`):
+API (all except /healthz need the token, as an `Authorization: Bearer TOKEN` header; a token
+in the URL is not accepted, so it never lands in logs):
     POST /api/event   {"session": "...", "state": "w|n|r|i|end", "channel": "home"}
     GET  /api/light?channel=home&have=i&wait=25
          Plain-text mode character. Returns as soon as the mode differs from `have`,
@@ -47,6 +48,9 @@ READY_SECONDS = 60           # how long "ready" shows after a session stops
 WORKING_STALE = 20 * 60      # a "working" session silent this long is assumed gone
 NEEDS_STALE = 3 * 60 * 60    # same for "needs you" (e.g. a killed session never answered)
 MAX_WAIT = 55                # longest long-poll, below common proxy idle timeouts
+MAX_CONNECTIONS = 32         # simultaneous connections; more are closed at once
+IDLE_TIMEOUT = 70            # seconds a connection may sit silent (must exceed MAX_WAIT)
+MAX_BODY = 4096              # bytes; event bodies are ~100
 PRIORITY = {"n": 3, "w": 2, "r": 1, "i": 0}
 STATES = set(PRIORITY) | {"end"}
 DEFAULT_CHANNEL = "home"
@@ -131,9 +135,40 @@ def load_token() -> str:
     return token
 
 
+class HubServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer with a cap on simultaneous connections.
+
+    The hub is reachable from the internet, so a flood of connections must not pile up
+    threads: past MAX_CONNECTIONS, new ones are closed straight away.
+    """
+
+    daemon_threads = True
+
+    def __init__(self, *args, max_connections: int = MAX_CONNECTIONS, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.slots = threading.BoundedSemaphore(max_connections)
+
+    def process_request(self, request, client_address):
+        if not self.slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
+
+
 def make_handler(hub: Hub, token: str):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"  # keep-alive, so lights reuse one TLS connection
+        timeout = IDLE_TIMEOUT  # drop connections that go quiet (slow or abandoned clients)
 
         def log_message(self, fmt, *args):  # quiet: lights poll constantly
             if os.environ.get("STATUS_HUB_VERBOSE"):
@@ -156,8 +191,9 @@ def make_handler(hub: Hub, token: str):
             return path, query
 
         def _authorized(self, query: dict) -> bool:
+            # Header only: a token in the URL could end up in logs or browser history.
             header = self.headers.get("Authorization", "")
-            given = header[7:].strip() if header.startswith("Bearer ") else query.get("token", "")
+            given = header[7:].strip() if header.startswith("Bearer ") else ""
             return secrets.compare_digest(given.encode(), token.encode())
 
         def do_GET(self):
@@ -181,9 +217,12 @@ def make_handler(hub: Hub, token: str):
             path, query = self._route()
             try:
                 length = int(self.headers.get("Content-Length", 0))
-                raw = self.rfile.read(min(length, 4096)) if length else b""
             except ValueError:
-                raw = b""
+                length = -1
+            if length < 0 or length > MAX_BODY:
+                self.close_connection = True  # don't read the rest of it
+                return self._send(413, "request too large\n")
+            raw = self.rfile.read(length) if length else b""
             if not self._authorized(query):
                 return self._send(401, "bad token\n")
             if path != "/api/event":
@@ -207,10 +246,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
+    parser.add_argument("--init-token", action="store_true",
+                        help="create the token file if missing, print where it is, and exit")
     args = parser.parse_args()
+    if args.init_token:
+        load_token()
+        print(f"token: {CONFIG_DIR / 'token'}")
+        return
     hub = Hub()
-    server = ThreadingHTTPServer((args.bind, args.port), make_handler(hub, load_token()))
-    server.daemon_threads = True
+    server = HubServer((args.bind, args.port), make_handler(hub, load_token()))
     print(f"status hub on http://{args.bind}:{args.port}", file=sys.stderr)
     try:
         server.serve_forever()

@@ -6,9 +6,10 @@ import time
 import unittest
 import urllib.error
 import urllib.request
-from http.server import ThreadingHTTPServer
+import http.client
+import socket
 
-from status_hub import READY_SECONDS, WORKING_STALE, Hub, make_handler
+from status_hub import READY_SECONDS, WORKING_STALE, Hub, HubServer, make_handler
 
 
 class FakeClock:
@@ -64,8 +65,7 @@ class HubHTTP(unittest.TestCase):
 
     def setUp(self):
         self.hub = Hub()
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(self.hub, self.TOKEN))
-        self.server.daemon_threads = True
+        self.server = HubServer(("127.0.0.1", 0), make_handler(self.hub, self.TOKEN), max_connections=4)
         self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
@@ -90,6 +90,40 @@ class HubHTTP(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as ctx:
             self.request("/api/event", {"session": "s", "state": "w"}, token=None)
         self.assertEqual(ctx.exception.code, 401)
+
+    def test_token_in_url_is_not_accepted(self):
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self.request(f"/api/light?token={self.TOKEN}", token=None)
+        self.assertEqual(ctx.exception.code, 401)
+
+    def test_rejects_oversized_body(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.server.server_address[1], timeout=5)
+        conn.putrequest("POST", "/api/event")
+        conn.putheader("Content-Length", str(10_000_000))
+        conn.putheader("Authorization", f"Bearer {self.TOKEN}")
+        conn.endheaders()
+        self.assertEqual(conn.getresponse().status, 413)
+        conn.close()
+
+    def test_connection_cap(self):
+        # Fill all 4 slots with idle connections; the next one is closed without an answer.
+        port = self.server.server_address[1]
+        held = [socket.create_connection(("127.0.0.1", port)) for _ in range(4)]
+        time.sleep(0.3)
+        try:
+            extra = socket.create_connection(("127.0.0.1", port))
+            extra.settimeout(3)
+            extra.sendall(b"GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n")
+            try:
+                self.assertEqual(extra.recv(100), b"")  # closed, no response
+            except ConnectionResetError:
+                pass
+            extra.close()
+        finally:
+            for s in held:
+                s.close()
+        time.sleep(0.3)
+        self.assertEqual(self.request("/healthz", token=None), (200, "ok\n"))  # slots freed
 
     def test_health_needs_no_token(self):
         self.assertEqual(self.request("/healthz", token=None), (200, "ok\n"))
