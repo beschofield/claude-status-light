@@ -1,5 +1,8 @@
 # Work light: USB only, nothing on the network
 
+> For a detailed security and implementation write-up to share with someone at work, see
+> **`docs/WORK-LIGHT-BRIEF.md`**.
+
 For a computer where Claude Code runs on that machine itself and the light sits on the
 same desk, e.g. a work laptop. Goal: be as conservative as possible with work IT.
 

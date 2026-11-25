@@ -23,7 +23,17 @@ work IT. Everything lives on the work laptop and the light: nothing on the work 
 contact the hub, charon, any public URL or the owner's GitHub. Flash the work light at home;
 copy only `client/claude-light` to the laptop by hand; `client.conf` has only `serial=`.
 `claude-light` in serial mode makes no network calls even if a hub is configured (tested by
-blocking sockets). Keep it that way. Guide: docs/work-usb.md.
+blocking sockets), and doesn't import urllib at all (only inside the hub-route functions).
+Keep it that way. Guide: docs/work-usb.md.
+
+**Work light brief (standing rule, owner's request 2026-11-24):** `docs/WORK-LIGHT-BRIEF.md`
+is a detailed security/implementation brief the owner can hand to anyone at work (assume a
+security reviewer who wants every detail). **Update it in the same PR as any change** to the
+firmware, `client/claude-light`, `client/hooks-settings.json`, the build/flash process or
+images: the TL;DR, the affected sections, "Last updated / Applies to", the image SHA-256 table
+(`sha256sum firmware/images/*_usb-*.bin`) and a change-log row. Re-verify claims you touch
+(symbol checks with nm on the USB ELF, the no-network/no-urllib tests) rather than assuming.
+Be quick and thorough; never let it go stale.
 
 ## Architecture
 - **hub/**: `status_hub.py`, Python stdlib, runs on charon as the systemd user service
