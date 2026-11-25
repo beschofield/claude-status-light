@@ -68,23 +68,53 @@ editing looks after the lights are built and wants pastels and varied colors: ke
 data in that file, add new effects in src/looks.cpp only when a look needs one, and keep the
 `p` preview listing every look.
 
-## Status / open items
-- 2026-11-24: XIAOs arrived. One flashed with the RGB Wi-Fi image and joined home Wi-Fi.
-  Hub running and published (tested through the public URL). Ring not yet soldered.
-- Hooks on charon not installed yet: wait until the wired light passes `claude-light --test`.
-  On charon use `hub=http://127.0.0.1:8787`.
+## Resume here (paused 2026-11-24, waiting on soldering access)
+
+**Where things stand**
+| Piece | State |
+|---|---|
+| Hub on charon | **Live.** `status-hub` user service, enabled at boot, sandboxed/hardened; public at `https://charon.taildc6780.ts.net/status-light`; token in `~/.config/claude-status-light/token`. Home channel empty (no sessions reporting yet). |
+| Home light (XIAO #1) | Flashed with the **RGB Wi-Fi** image from PR #5 (before the looks table, so no `p`/`[`/`]` yet) and joined home Wi-Fi via the setup screen. **Unconfirmed:** whether the owner entered the hub address/token/channel on the setup screen afterwards. **Ring not soldered.** |
+| Work light (XIAO #2) | Untouched. Will get `status-light-rgb_usb-full.bin` (or `rgbw_usb`) flashed at home. |
+| Rings | RGB 1643 (for the home light first) and RGBW 2852 natural, both on hand. |
+| Hooks / client on charon | **Not installed** (on purpose until the wired light works). |
+| Work laptop | Nothing installed. OS and Python availability unknown. |
+| Enclosure (Onshape) | Lessons 1-2 done; lesson 3 (XIAO pocket) needs XIAO measurements. See model/ONSHAPE.md. |
+| Repo | Everything merged to `main` (PRs #1-#8). No open PRs, no other branches. |
+
+**Next steps, in order**
+1. *Owner:* solder the RGB ring to XIAO #1 at the makerspace: 5V -> PWR, GND -> GND,
+   D2 -> 470 ohm (near the ring) -> IN. (docs/hardware.md)
+2. *Owner (optional, recommended):* flash `firmware/images/status-light-rgb_wifi-update.bin`
+   at **0xe000** to get the looks table, `p` preview and `[`/`]` (keeps Wi-Fi and settings).
+3. *Owner:* if not done, hold BOOT 2 s, join StatusLight-Setup, re-pick Wi-Fi, enter hub
+   `https://charon.taildc6780.ts.net/status-light`, the token (`cat ~/.config/claude-status-light/token`
+   on charon), channel `home`. `http://<name>.local` should say "Hub: connected".
+4. *Owner:* test from `http://<name>.local` (each mode) and serial `p`.
+5. *Claude, on charon:* install the client (`cp client/claude-light ~/.local/bin/`), write
+   `~/.config/claude-status-light/client.conf` with `hub=http://127.0.0.1:8787` and the token,
+   run `claude-light --test` while the owner watches the light, then (with the owner's OK, since
+   hooks affect every session) merge `client/hooks-settings.json` into `~/.claude/settings.json`.
+6. Then the work light (docs/work-usb.md): flash XIAO #2 with the `_usb` image at home, solder,
+   test in the flasher's Console tab; ask the owner for the work laptop's OS and whether Python 3
+   is allowed (if not, write a PowerShell/zsh client). **Update docs/WORK-LIGHT-BRIEF.md** with
+   anything that changes.
+7. Onshape lesson 3 once the owner has measured the XIAO (length, width, thickness with shield,
+   USB-C overhang, antenna size).
+
+## Open items / notes
 - Security: owner is cautious about the public hub. Hardened 2026-11-24: sandboxed systemd
   unit (sees only hub/ and its token, read-only), token checked before reading bodies (header-only),
   refused requests closed, 10 s body deadline, 4 KB body limit, 32-connection cap, 120 s idle
   timeout (must stay above the Funnel proxy's 90 s). Keep it that way when changing the hub.
-- Work laptop OS unknown; the USB client needs Python 3 there. If Python isn't allowed, write
-  a PowerShell/zsh-only client (still no network).
-- Enclosure: lesson 3 swaps the Flora pocket for a XIAO pocket (model/ONSHAPE.md).
+  Deploy hub changes with: pull main, `cp hub/status-hub.service ~/.config/systemd/user/`,
+  `systemctl --user daemon-reload && systemctl --user restart status-hub`, then check
+  `/healthz` locally and through the public URL.
+- Funnel: to unpublish only the hub, `tailscale funnel --https=443 --set-path /status-light off`
+  (the plain `--https=443 off` would also take down the ghost figure at `/`).
 - Test whether T3 Code triggers the Claude Code hooks. ChatGPT has no hooks (browser
   extension idea). Codex has its own hook/notify config: could call claude-light too.
-- Order (2026-11-24): the first physical prototype is the **home Wi-Fi light** (RGB ring
-  1643 on the XIAO already flashed with the Wi-Fi image and on home Wi-Fi). Software: home
-  path first (hooks on charon once the light works, hub hardening), then the work USB light
-  and client (needs the work laptop's OS / Python answer).
 - Later: updates over Wi-Fi for sealed Wi-Fi lights, like the ghost figure's OTA (partition
   layout already leaves room). USB lights are always plugged in, so they reflash over USB.
+- Git workflow used so far: work on a branch (worktree in background sessions), PR, and merge
+  only when the owner says so (owner usually asks for a code review first).
